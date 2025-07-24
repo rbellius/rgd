@@ -1,0 +1,143 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: network-stack-definition
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: NetworkStack
+    spec:
+        name: string
+        domain: string
+        email: string
+
+        production: boolean | false
+
+        # ingress:
+        #   enabled: boolean | default=true
+        #   domain: string | default="example.com"
+        #   subdomain: string | default="app"
+        #   tls: boolean | default=false
+
+        ingress:
+          class: string |  default="traefik"
+
+        dns:
+          token: string
+          duckdns: boolean | default=false
+          cloudflare: boolean | default=false
+          dynamicDns: boolean | default=true
+
+
+    status:
+      # Fields the controller will inject into instances status.
+      certManagerConditions: ${certManagerHelmChart.status.conditions}
+
+#  validation:
+#     # Validating admission policies added to the new API type's CRD
+#     - expression: "${ self.image == 'nginx' || !self.ingress.enabled }"
+#       message: "Only nginx based applications can have ingress enabled"
+
+  # Define the resources this API will manage.
+  resources:
+      - id: certManagerHelmChart
+        template:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Application
+            metadata:
+              name: cert-manager
+              namespace: argocd
+              annotations:
+                argocd.argoproj.io/sync-wave: "-10"
+                
+              finalizers:
+                - resources-finalizer.argocd.argoproj.io
+
+            spec:
+              project: default
+
+              syncPolicy:
+                automated:
+                  selfHeal: true
+                  prune: true
+                  allowEmpty: true
+              
+                syncOptions:
+                  - CreateNamespace=true
+                  # - ApplyOutOfSyncOnly=true
+
+              destination:
+                server: https://kubernetes.default.svc
+                namespace: cert-manager
+
+              source:
+                repoURL: https://charts.jetstack.io
+                chart: cert-manager  
+                targetRevision: 1.17.1
+                helm:
+                  values: |
+                    crds:
+                      enabled: true
+                      keep: false
+       
+
+  
+      - id: certManagerWebhookDuckdnsHelmChart
+        includeWhen:
+          - ${schema.spec.dns.duckdns} # Only include if the user wants to use DuckDNS
+        # readyWhen:
+        #   - ${certManagerHelmChart.status.conditions} # Ensure cert-manager is ready before deploying the webhook
+        template:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Application
+            metadata:
+              name: cert-manager-duckdns-webhook
+              namespace: argocd
+              annotations:
+                argocd.argoproj.io/sync-wave: "-10"
+                
+              finalizers:
+                - resources-finalizer.argocd.argoproj.io
+
+            spec:
+              project: default
+
+              syncPolicy:
+                automated:
+                  selfHeal: true
+                  prune: true
+                  allowEmpty: true
+              
+                syncOptions:
+                  - CreateNamespace=true
+                  # - ApplyOutOfSyncOnly=true
+
+              destination:
+                server: https://kubernetes.default.svc
+                namespace: cert-manager
+
+              source:
+                repoURL: https://csp33.github.io/cert-manager-duckdns-webhook
+                chart: cert-manager-duckdns-webhook  
+                targetRevision: 1.1.3
+                helm:
+                  values: |
+                    crds:
+                      enabled: true
+                      keep: false
+
+                    duckdns:
+                      token: ${schema.spec.dns.token}
+                
+                    clusterIssuer:
+                      email: ${schema.spec.email}
+                      staging:
+                        create: true
+                        name: lets-encrypt-acme-issuer-staging
+                      production:
+                        create: ${schema.spec.production}
+                        name: lets-encrypt-acme-issuer-production 
+
+
+
+
