@@ -1,0 +1,13 @@
+apiVersion: v1
+entries:
+  argodfile-applicationset-rgd:
+  - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2025-08-16T11:56:09.628255273-05:00"
+    description: A Helm chart for Kubernetes
+    digest: be523b3a1d0e6f17defe67bd4499756c6b46c4a088c3b4fdcabbd0e9d91502f5
+    name: argodfile-applicationset-rgd
+    urls:
+    - argodfile-applicationset-rgd-0.1.1.tgz
+    version: 0.1.1
+generated: "2025-08-16T11:56:09.627798845-05:00"
